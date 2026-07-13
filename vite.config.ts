@@ -4,7 +4,9 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 
-export default defineConfig(() => {\n  return {\n    base: './',
+export default defineConfig(() => {
+  return {
+    base: './',
     plugins: [react(), tailwindcss(), viteSingleFile()],
     resolve: {
       alias: {
