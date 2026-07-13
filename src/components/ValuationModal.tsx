@@ -30,19 +30,38 @@ export default function ValuationModal({ item, onClose, onSaved }: Props) {
   const { user } = useAppContext();
   const isLocked = (item.estatus === 'Poliza' || item.estatus === 'Liquidación') && user?.role !== 'gerencia';
 
+  const formatToInput = (dateString?: any) => {
+    if (!dateString) return '';
+    const str = String(dateString);
+    if (str.includes('T')) return str.split('T')[0];
+    if (str.includes('/')) {
+      const parts = str.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      }
+    }
+    return str;
+  };
+
+
   useEffect(() => {
     fetchAPI('getValuationData', { vin: item.vin }).then(res => {
       if (res.status === 'success' && res.data) {
-        setData(res.data);
+        const d = res.data;
+        if (d.fecha_avaluo) { d.fecha_avaluo = formatToInput(d.fecha_avaluo); }
+        setData(d);
       }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [item.vin]);
 
   const calcTotals = (newData: ValuationData) => {
-    const sumM = newData.mecanica.reduce((a, b) => a + Number(b.importe || 0), 0);
-    const sumMO = newData.mano_obra.reduce((a, b) => a + Number(b.importe || 0), 0);
-    const sumHYP = newData.hyp.reduce((a, b) => a + Number(b.importe || 0), 0);
+    const sumM = (newData.mecanica || []).reduce((a, b) => a + Number(b.importe || 0), 0);
+    const sumMO = (newData.mano_obra || []).reduce((a, b) => a + Number(b.importe || 0), 0);
+    const sumHYP = (newData.hyp || []).reduce((a, b) => a + Number(b.importe || 0), 0);
     newData.subtotal_mecanica = sumM;
     newData.subtotal_mo = sumMO;
     newData.subtotal_hyp = sumHYP;
@@ -74,7 +93,7 @@ export default function ValuationModal({ item, onClose, onSaved }: Props) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await fetchAPI('save_valuation', { vin: item.vin, data: { ...data, fecha_avaluo: data.fecha_avaluo ? data.fecha_avaluo.split('-').reverse().join('/') : '' } });
+      await fetchAPI('save_valuation', { vin: item.vin, data: { ...data, fecha_avaluo: data.fecha_avaluo ? String(data.fecha_avaluo).split('-').reverse().join('/') : '' } });
       onSaved();
     } catch(e) {
       console.error(e);
@@ -90,8 +109,8 @@ export default function ValuationModal({ item, onClose, onSaved }: Props) {
     );
   }
 
-  const iva = (data.subtotal_mecanica + data.subtotal_mo + data.subtotal_hyp) * 0.16;
-  const sub = data.subtotal_mecanica + data.subtotal_mo + data.subtotal_hyp;
+  const iva = ((Number(data.subtotal_mecanica)||0) + (Number(data.subtotal_mo)||0) + (Number(data.subtotal_hyp)||0)) * 0.16;
+  const sub = (Number(data.subtotal_mecanica)||0) + (Number(data.subtotal_mo)||0) + (Number(data.subtotal_hyp)||0);
 
   const renderTable = (title: string, section: 'mecanica'|'mano_obra'|'hyp') => (
     <div className="mb-4 bg-white border border-gray-200 rounded p-2">
@@ -119,7 +138,7 @@ export default function ValuationModal({ item, onClose, onSaved }: Props) {
         <tfoot>
           <tr>
             <td className="text-right p-1 font-bold">Subtotal:</td>
-            <td className="p-1 font-bold">${data[`subtotal_${section === 'mecanica' ? 'mecanica' : section === 'mano_obra' ? 'mo' : 'hyp'}` as keyof ValuationData]?.toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+            <td className="p-1 font-bold">${Number(data[`subtotal_${section === 'mecanica' ? 'mecanica' : section === 'mano_obra' ? 'mo' : 'hyp'}` as keyof ValuationData] || 0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
             <td></td>
           </tr>
         </tfoot>
@@ -187,7 +206,7 @@ export default function ValuationModal({ item, onClose, onSaved }: Props) {
                   <tbody>
                     <tr><td className="pr-4 font-bold text-gray-600">Subtotal:</td><td className="w-32">${sub.toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
                     <tr><td className="pr-4 font-bold text-gray-600">I.V.A. (16%):</td><td className="w-32 border-b border-gray-400">${iva.toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
-                    <tr><td className="pr-4 font-bold text-lg">TOTAL:</td><td className="w-32 font-bold text-lg">${data.gran_total?.toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
+                    <tr><td className="pr-4 font-bold text-lg">TOTAL:</td><td className="w-32 font-bold text-lg">${Number(data.gran_total || 0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>
                   </tbody>
                 </table>
               </div>

@@ -10,14 +10,20 @@ interface Props {
 }
 
 export default function TrackingModal({ item, onClose, onSaved }: Props) {
-  const formatToInput = (dateString?: string) => {
+  const formatToInput = (dateString?: any) => {
     if (!dateString) return '';
-    if (dateString.includes('T')) return dateString.split('T')[0];
-    if (dateString.includes('/')) {
-      const parts = dateString.split('/');
-      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    const str = String(dateString);
+    if (str.includes('T')) return str.split('T')[0];
+    if (str.includes('/')) {
+      const parts = str.split('/');
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      }
     }
-    return dateString;
+    return str;
   };
   const [data, setData] = useState<Partial<InventoryItem>>({
     fecha_contrato: formatToInput(item.fecha_contrato),

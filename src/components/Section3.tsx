@@ -18,7 +18,7 @@ const DOCS_ASESOR = [
   "VERIFICACION DE FACTURA 1", "VERIFICACION DE FACTURA 2", "CONTRATO DE COMPRA-VENTA", 
   "IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER"
 ];
-const DOCS_SERVICIO = ["IMAGEN ESCANER", "REPORTE ESCANER", "IMAGEN VIN"];
+const DOCS_SERVICIO = ["IMAGEN ESCANER", "REPORTE ESCANER", "IMAGEN VIN", "VALUACION DE LA UNIDAD", "PRESUPUESTO DE REPARACION"];
 
 const ESTATUS_ASESOR = ["Solicitud Avalúo", "Envío de Expediente"];
 const ESTATUS_SERVICIO = ["Avalúo Listo", "Avalúo Rechazado"];
@@ -64,7 +64,12 @@ export default function Section3() {
     if (!localString) return '';
     if (localString.includes('/')) {
       const parts = localString.split('/');
-      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2];
+        return `${year}-${month}-${day}`;
+      }
     }
     return localString;
   };
@@ -363,7 +368,7 @@ export default function Section3() {
         addSection('Mano de Obra', valData.mano_obra, valData.subtotal_mo);
         addSection('Hojalatería y Pintura (HYP)', valData.hyp, valData.subtotal_hyp);
 
-        const sub = (valData.subtotal_mecanica || 0) + (valData.subtotal_mo || 0) + (valData.subtotal_hyp || 0);
+        const sub = (Number(valData.subtotal_mecanica) || 0) + (Number(valData.subtotal_mo) || 0) + (Number(valData.subtotal_hyp) || 0);
         const iva = sub * 0.16;
         
         doc.setFont("helvetica", "normal");
@@ -373,7 +378,7 @@ export default function Section3() {
         doc.text(`${iva.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY + 5, { align: 'right' });
         doc.setFont("helvetica", "bold");
         doc.text("Gran Total:", 140, startY + 10);
-        doc.text(`${(valData.gran_total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY + 10, { align: 'right' });
+        doc.text(`${Number(valData.gran_total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY + 10, { align: 'right' });
         
         if (valData.observaciones) {
           doc.setFontSize(11);
@@ -613,7 +618,7 @@ const getStatusOptions = () => {
               <option value="Avalúo Rechazado">Avalúo Rechazado</option>
               <option value="Envío de Expediente">Envío de Expediente</option>
               <option value="Envío de Contrato">Envío de Contrato</option>
-              <option value="Poliza">Poliza</option>
+              <option value="Poliza">Póliza</option>
               <option value="Liquidación">Liquidación</option>
             </select>
           </div>
@@ -682,9 +687,9 @@ const getStatusOptions = () => {
                         disabled={isLocked || (user.role === 'servicio' && !ESTATUS_SERVICIO.includes(item.estatus) && item.estatus !== 'Solicitud Avalúo')}
                         className="p-1.5 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:border-[#00aad2] w-full max-w-[150px] disabled:bg-gray-100"
                       >
-                        <option value={item.estatus}>{item.estatus}</option>
+                        <option value={item.estatus}>{item.estatus === 'Poliza' ? 'Póliza' : item.estatus}</option>
                         {getStatusOptions().filter(o => o !== item.estatus).map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
+                          <option key={opt} value={opt}>{opt === 'Poliza' ? 'Póliza' : opt}</option>
                         ))}
                       </select>
                     </td>
