@@ -53,11 +53,14 @@ export default function Section3() {
 
   const formatToLocal = (dateString?: string) => {
     if (!dateString) return '';
-    if (dateString.includes('T')) {
-      const parts = dateString.split('T')[0].split('-');
-      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    const str = String(dateString);
+    if (str.includes('-') && !str.includes('/')) {
+      const parts = str.split('T')[0].split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
     }
-    return dateString;
+    return str;
   };
   
   const parseFromLocal = (localString?: string) => {
@@ -113,7 +116,7 @@ export default function Section3() {
               bytes[i] = byteString.charCodeAt(i);
             }
             if (file.mimeType === 'application/pdf') {
-              const pdf = await PDFDocument.load(bytes);
+              const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
               const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
               copiedPages.forEach((page) => mergedPdf.addPage(page));
             } else if (file.mimeType.startsWith('image/')) {
@@ -137,6 +140,10 @@ export default function Section3() {
           } catch(e) {
             console.error("Could not add file to merge", e);
           }
+        }
+        
+        if (mergedPdf.getPageCount() === 0) {
+          throw new Error('Ninguno de los archivos pudo ser procesado o no hay contenido para combinar.');
         }
         const mergedPdfBytes = await mergedPdf.save();
         const blob = new Blob([mergedPdfBytes], { type: 'application/pdf' });
@@ -291,20 +298,50 @@ export default function Section3() {
     }
   };
 
-  const handleUploadAction = () => {
+  const handleUploadAction = async () => {
     const file = fileInputRef.current?.files?.[0];
     if (!file || !selectedItem || !selectedDocType) return;
     
     setUploading(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      const base64Data = (evt.target?.result as string).split(',')[1];
+    const compressImage = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const MAX_SIZE = 1200;
+            if (width > height && width > MAX_SIZE) {
+              height *= MAX_SIZE / width;
+              width = MAX_SIZE;
+            } else if (height > MAX_SIZE) {
+              width *= MAX_SIZE / height;
+              height = MAX_SIZE;
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+          };
+          img.onerror = reject;
+          img.src = event.target?.result as string;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    };
+
+    if (file.type.startsWith('image/')) {
       try {
+        const base64Data = await compressImage(file);
         const res = await fetchAPI('upload_file', {
           vin: selectedItem.vin,
           docType: selectedDocType,
           fileName: file.name,
-          mimeType: file.type,
+          mimeType: 'image/jpeg',
           fileData: base64Data,
           folderName: `${selectedItem.cliente} - ${selectedItem.asesor || user?.name}`
         });
@@ -318,14 +355,40 @@ export default function Section3() {
           setCustomAlert({ message: 'Error: ' + res.message });
         }
       } catch (e) {
-        setCustomAlert({ message: 'Error de conexión.' });
+        setCustomAlert({ message: 'Error al subir la imagen.' });
       }
-      setUploading(false);
-      setSelectedFileName('');
-      setSelectedDocType('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const base64Data = (evt.target?.result as string).split(',')[1];
+        try {
+          const res = await fetchAPI('upload_file', {
+            vin: selectedItem.vin,
+            docType: selectedDocType,
+            fileName: file.name,
+            mimeType: file.type,
+            fileData: base64Data,
+            folderName: `${selectedItem.cliente} - ${selectedItem.asesor || user?.name}`
+          });
+          if (res.status === 'success') {
+            setCustomAlert({ message: 'Documento subido correctamente a Google Drive.' });
+            const folderName = `${selectedItem.cliente} - ${selectedItem.asesor || user?.name}`;
+            fetchAPI('get_files_for_vin', { vin: selectedItem.vin, folderName }).then(r => {
+              if (r.status === 'success') setLoadedFiles(r.data || []);
+            });
+          } else {
+            setCustomAlert({ message: 'Error: ' + res.message });
+          }
+        } catch (e) {
+          setCustomAlert({ message: 'Error de conexión.' });
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+    setUploading(false);
+    setSelectedFileName('');
+    setSelectedDocType('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const generateAvaluoPDF = async (item: InventoryItem) => {
@@ -802,6 +865,10 @@ const getStatusOptions = () => {
             <div className="p-5 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700">Fecha de Registro</label>
+                  <input type="date" value={formData.fecha || ''} onChange={e => handleFormChange("fecha", e.target.value)} disabled={isFormLocked} className="w-full p-2 border border-gray-300 rounded focus:border-[#00aad2] outline-none" />
+                </div>
+                <div className="space-y-1">
                   <label className="text-xs font-bold text-gray-700">Serie (VIN) *</label>
                   <input type="text" value={formData.vin || ""} onChange={e => handleFormChange("vin", e.target.value)} disabled={!!selectedItem || isFormLocked} className="w-full p-2 border border-gray-300 rounded focus:border-[#00aad2] outline-none disabled:bg-gray-100 uppercase" />
                 </div>
@@ -816,9 +883,9 @@ const getStatusOptions = () => {
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Versión</label><input type="text" disabled={isFormLocked} value={formData.version || ''} onChange={e => handleFormChange('version', e.target.value)} className="w-full p-2 border border-gray-300 rounded" /></div>
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Kilometraje</label><input type="text" disabled={isFormLocked} value={formData.km || ''} onChange={e => handleFormChange('km', e.target.value)} className="w-full p-2 border border-gray-300 rounded" /></div>
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Placa</label><input type="text" disabled={isFormLocked} value={formData.placa || ''} onChange={e => handleFormChange('placa', e.target.value)} className="w-full p-2 border border-gray-300 rounded" /></div>
-                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Precio Compra ($)</label><input type="number" value={formData.precio_compra || ''} onChange={e => handleFormChange('precio_compra', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>
-                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Precio Venta ($)</label><input type="number" value={formData.precio_venta || ''} onChange={e => handleFormChange('precio_venta', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>
-                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Toma Avalúo ($)</label><input type="number" value={formData.toma || ''} onChange={e => handleFormChange('toma', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Precio Compra ($)</label><input type="number" value={formData.precio_compra || ''} onChange={e => handleFormChange('precio_compra', Number(e.target.value))} className="w-full p-2 border border-blue-300 bg-blue-50 rounded" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Precio Venta ($)</label><input type="number" value={formData.precio_venta || ''} onChange={e => handleFormChange('precio_venta', Number(e.target.value))} className="w-full p-2 border border-green-300 bg-green-50 rounded" /></div>
+                <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Toma Avalúo ($)</label><input type="number" value={formData.toma || ''} onChange={e => handleFormChange('toma', Number(e.target.value))} className="w-full p-2 border border-yellow-300 bg-yellow-50 rounded" /></div>
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Dación en Pago ($)</label><input type="number" value={formData.dacion || ''} onChange={e => handleFormChange('dacion', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Liq. Financiera ($)</label><input type="number" value={formData.liq_financiera || ''} onChange={e => handleFormChange('liq_financiera', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>
                 <div className="space-y-1"><label className="text-xs font-bold text-gray-700">Devolución Cliente ($)</label><input type="number" value={formData.dev_cliente || ''} onChange={e => handleFormChange('dev_cliente', Number(e.target.value))} className="w-full p-2 border border-gray-300 rounded" /></div>

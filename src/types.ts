@@ -31,6 +31,7 @@ export interface InventoryItem {
   rec_modelo?: string;
   rec_vin?: string;
   asesor: string;
+  color?: string;
   estatus: string;
   estatus_avaluo?: string;
   fecha_contrato?: string;
