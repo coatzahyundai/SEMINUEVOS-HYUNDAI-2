@@ -1,17 +1,17 @@
 const fs = require('fs');
-let code = fs.readFileSync('appscript_v5.js', 'utf8');
 
-const newDocsTodos = `const DOCS_TODOS = [
-  "CARATULA DE DOCUMENTOS", "FACTURA ORIGINAL", "FACTURA COPIA O CARTA COMPROMISO O REFACTURA", 
-  "TENENCIA 2019", "TENENCIA 2020", "TENENCIA 2021", "TENENCIA 2022", "TENENCIA 2023", 
-  "TENENCIA 2024", "TENENCIA 2025", "TENENCIA 2026", "TENENCIA 2027", 
-  "BAJA DE PLACAS O CARTA COMPROMISO", "TARJETA DE CIRCULACION", "VERIFICACION", 
-  "VALUACION DE LA UNIDAD", "PRESUPUESTO DE REPARACION", "GUIA AZUL", "INE DEL CLIENTE", 
-  "COMP DE DOMICILIO", "CURP", "CSF", "REPUVE", "TRANSUNION 1", "TRANSUNION 2", 
-  "VERIFICACION DE FACTURA 1", "VERIFICACION DE FACTURA 2", "CONTRATO DE COMPRA-VENTA", 
-  "IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER"
-];`;
+let s3 = fs.readFileSync('src/components/Section3.tsx', 'utf8');
+s3 = s3.replace(
+  /"IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER"\]/g,
+  '"IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER", "EDO CLIENTE", "EDO FINANCIERA"]'
+);
+fs.writeFileSync('src/components/Section3.tsx', s3);
 
-code = code.replace(/const DOCS_TODOS = \[\s*[\s\S]*?\];/m, newDocsTodos);
+let as = fs.readFileSync('appscript_final.js', 'utf8');
+as = as.replace(
+  /"IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER"\]/g,
+  '"IMAGEN ESCANER", "IMAGEN VIN", "REPORTE ESCANER", "EDO CLIENTE", "EDO FINANCIERA"]'
+);
+fs.writeFileSync('appscript_final.js', as);
 
-fs.writeFileSync('appscript_v5.js', code);
+console.log("Done");
