@@ -350,20 +350,24 @@ function getFilesForVin(vin) {
     return -1;
   };
 
-  for (var i = 0; i < headersRow2.length; i++) {
-    var docIdx = getDocIdx(headersRow2[i]);
-    
-    if (docIdx !== -1 && rowData[i] && rowData[i].toString().trim() !== "") {
+    for (var j = 0; j < DOCS_TODOS.length; j++) {
+    var expectedDoc = DOCS_TODOS[j];
+    var colIdx = -1;
+    var normExpected = normalizeKey(expectedDoc);
+    for (var k = 0; k < headersRow2.length; k++) {
+      if (normalizeKey(headersRow2[k]) === normExpected) { colIdx = k; break; }
+    }
+    if (colIdx !== -1 && rowData[colIdx] && rowData[colIdx].toString().trim() !== "") {
       try {
-        var fileId = rowData[i].toString().trim();
+        var fileId = rowData[colIdx].toString().trim();
         if (fileId.indexOf(',') !== -1) {
            var parts = fileId.split(',');
            fileId = parts[parts.length - 1].trim();
         }
         var file = DriveApp.getFileById(fileId);
-        loadedFiles.push({ type: DOCS_TODOS[docIdx], name: file.getName(), url: file.getUrl() });
+        loadedFiles.push({ type: DOCS_TODOS[j], name: file.getName(), url: file.getUrl() });
       } catch(e) {
-        loadedFiles.push({ type: DOCS_TODOS[docIdx], name: "Archivo inaccesible en Drive", error: true });
+        loadedFiles.push({ type: DOCS_TODOS[j], name: "Archivo inaccesible en Drive", error: true });
       }
     }
   }
@@ -671,11 +675,16 @@ function getAllFilesBase64(vin) {
     return -1;
   };
 
-  for (var i = 0; i < headersRow2.length; i++) {
-    var docIdx = getDocIdx(headersRow2[i]);
-    if (docIdx !== -1 && rowData[i] && rowData[i].toString().trim() !== "") {
+    for (var j = 0; j < DOCS_TODOS.length; j++) {
+    var expectedDoc = DOCS_TODOS[j];
+    var colIdx = -1;
+    var normExpected = normalizeKey(expectedDoc);
+    for (var k = 0; k < headersRow2.length; k++) {
+      if (normalizeKey(headersRow2[k]) === normExpected) { colIdx = k; break; }
+    }
+    if (colIdx !== -1 && rowData[colIdx] && rowData[colIdx].toString().trim() !== "") {
       try {
-        var fileId = rowData[i].toString().trim();
+        var fileId = rowData[colIdx].toString().trim();
         if (fileId.indexOf(',') !== -1) {
            var parts = fileId.split(',');
            fileId = parts[parts.length - 1].trim();
@@ -692,6 +701,5 @@ function getAllFilesBase64(vin) {
       }
     }
   }
-  
   return { status: "success", data: filesData };
 }
