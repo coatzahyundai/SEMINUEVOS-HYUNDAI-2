@@ -414,101 +414,70 @@ export default function Section3() {
     document.body.removeChild(el);
   };
 
-  const copyAvaluoEmail = async (item: InventoryItem) => {
+  
+  const generateAvaluoPDF = async (item: InventoryItem) => {
     try {
       const valRes = await fetchAPI('getValuationData', { vin: item.vin });
       const valData = valRes.status === 'success' ? valRes.data : null;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text("Presupuesto de Avalúo", 14, 20);
       
-      if (!valData) {
-        setCustomAlert({ message: 'No hay datos de presupuesto cargados para copiar.' });
-        return;
+      doc.setFontSize(10);
+      doc.text(`Cliente: ${item.cliente}`, 14, 30);
+      doc.text(`VIN: ${item.vin}`, 14, 35);
+      doc.text(`Vehículo: ${item.marca} ${item.linea} ${item.modelo}`, 14, 40);
+      doc.text(`Asesor: ${item.asesor}`, 14, 45);
+      
+      if (valData) {
+        doc.text(`Valuador Técnico: ${valData.valuador_tecnico || 'N/A'}`, 14, 55);
+        doc.text(`Fecha Avalúo: ${valData.fecha_avaluo || 'N/A'}`, 14, 60);
+        let startY = 70;
+        const addSection = (title: string, items: any[], subtotal: number) => {
+          if (!items || items.length === 0) return;
+          doc.text(title, 14, startY);
+          autoTable(doc, {
+            startY: startY + 2,
+            head: [['Descripción', 'Importe']],
+            body: items.map(i => [i.descripcion, `${Number(i.importe).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]),
+            foot: [['Subtotal', `${Number(subtotal).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`]],
+            theme: 'grid',
+            headStyles: { fillColor: [0, 44, 95] },
+            columnStyles: { 1: { halign: 'right' } }
+          });
+          startY = (doc as any).lastAutoTable.finalY + 10;
+        };
+        addSection('Mecánica', valData.mecanica, valData.subtotal_mecanica);
+        addSection('Mano de Obra', valData.mano_obra, valData.subtotal_mo);
+        addSection('Hojalatería y Pintura (HYP)', valData.hyp, valData.subtotal_hyp);
+        const sub = (Number(valData.subtotal_mecanica) || 0) + (Number(valData.subtotal_mo) || 0) + (Number(valData.subtotal_hyp) || 0);
+        const iva = sub * 0.16;
+        
+        doc.setFont("helvetica", "normal");
+        doc.text("Subtotal General:", 140, startY);
+        doc.text(`${sub.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY, { align: 'right' });
+        doc.text("I.V.A (16%):", 140, startY + 5);
+        doc.text(`${iva.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY + 5, { align: 'right' });
+        doc.setFont("helvetica", "bold");
+        doc.text("Gran Total:", 140, startY + 10);
+        doc.text(`${Number(valData.gran_total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`, 196, startY + 10, { align: 'right' });
+        
+        if (valData.observaciones) {
+          doc.setFontSize(11);
+          doc.setFont("helvetica", "bold");
+          doc.text("Observaciones:", 14, startY + 25);
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+          const splitObs = doc.splitTextToSize(valData.observaciones, 180);
+          doc.text(splitObs, 14, startY + 30);
+        }
+      } else {
+        doc.text("No hay datos de presupuesto cargados.", 14, 60);
       }
-
-      const formatCurrency = (val: any) => {
-        if (!val) return '';
-        const num = Number(val);
-        if (isNaN(num)) return val.toString();
-        return '$' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-      };
-
-      let tablesHtml = '';
-      const addSection = (title: string, items: any[], subtotal: number) => {
-        if (!items || items.length === 0) return;
-        tablesHtml += `
-          <h4 style="margin: 10px 0 5px 0;">${title}</h4>
-          <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; width: 100%; border: 1px solid #000; font-size: 11px;">
-            <thead>
-              <tr style="background-color: #002c5f; color: #ffffff;">
-                <th style="text-align: left;">Descripción</th>
-                <th style="text-align: right;">Importe</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map(i => `
-                <tr>
-                  <td style="text-align: left;">${i.descripcion}</td>
-                  <td style="text-align: right;">${formatCurrency(i.importe)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-            <tfoot>
-              <tr style="font-weight: bold; background-color: #f3f4f6;">
-                <td style="text-align: right;">Subtotal</td>
-                <td style="text-align: right;">${formatCurrency(subtotal)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        `;
-      };
-
-      addSection('Mecánica', valData.mecanica, valData.subtotal_mecanica);
-      addSection('Mano de Obra', valData.mano_obra, valData.subtotal_mo);
-      addSection('Hojalatería y Pintura (HYP)', valData.hyp, valData.subtotal_hyp);
-
-      const sub = (Number(valData.subtotal_mecanica) || 0) + (Number(valData.subtotal_mo) || 0) + (Number(valData.subtotal_hyp) || 0);
-      const iva = sub * 0.16;
-      const granTotal = Number(valData.gran_total || 0);
-
-      const html = `
-        <div style="font-family: Arial, sans-serif; font-size: 12px; color: #000; max-width: 800px;">
-          <h2>Presupuesto de Avalúo</h2>
-          <p>
-            <strong>Cliente:</strong> ${item.cliente}<br/>
-            <strong>VIN:</strong> ${item.vin}<br/>
-            <strong>Vehículo:</strong> ${item.marca} ${item.linea} ${item.modelo}<br/>
-            <strong>Asesor:</strong> ${item.asesor}<br/>
-            <strong>Valuador Técnico:</strong> ${valData.valuador_tecnico || 'N/A'}<br/>
-            <strong>Fecha Avalúo:</strong> ${valData.fecha_avaluo || 'N/A'}
-          </p>
-          
-          ${tablesHtml}
-          
-          <table border="0" cellpadding="5" cellspacing="0" style="width: 100%; font-size: 12px; margin-top: 15px;">
-            <tr>
-              <td style="text-align: right; width: 70%;"><strong>Subtotal General:</strong></td>
-              <td style="text-align: right; width: 30%;">${formatCurrency(sub)}</td>
-            </tr>
-            <tr>
-              <td style="text-align: right;"><strong>I.V.A (16%):</strong></td>
-              <td style="text-align: right;">${formatCurrency(iva)}</td>
-            </tr>
-            <tr>
-              <td style="text-align: right; font-size: 14px;"><strong>Gran Total:</strong></td>
-              <td style="text-align: right; font-size: 14px;"><strong>${formatCurrency(granTotal)}</strong></td>
-            </tr>
-          </table>
-          
-          ${valData.observaciones ? `
-            <div style="margin-top: 20px;">
-              <strong>Observaciones:</strong><br/>
-              <p style="white-space: pre-wrap;">${valData.observaciones}</p>
-            </div>
-          ` : ''}
-        </div>
-      `;
-      copyHTMLToClipboard(html);
-    } catch (e) {
-      setCustomAlert({ message: 'Error al generar formato de correo.' });
+      
+      doc.save(`Presupuesto_${item.vin}.pdf`);
+    } catch(e) {
+      setCustomAlert({ message: 'Error al generar PDF' });
     }
   };
 
@@ -519,7 +488,7 @@ export default function Section3() {
       const granTotal = valData ? valData.gran_total : 0;
       
       const formatCurrency = (val: any) => {
-        if (!val) return '';
+        if (val === null || val === undefined || val === '') return '';
         const num = Number(val);
         if (isNaN(num)) return val.toString();
         return '$' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -589,68 +558,7 @@ export default function Section3() {
   
   
 
-  const generateTomaPDF = async (item: InventoryItem) => {
-    try {
-      const valRes = await fetchAPI('getValuationData', { vin: item.vin });
-      const valData = valRes.status === 'success' ? valRes.data : null;
-      const granTotal = valData ? valData.gran_total : 0;
-
-      const doc = new jsPDF('landscape'); // Landscape to fit all columns
-      doc.setFontSize(10);
-      doc.text("Anexo documentación para toma de unidad y formato requerido; favor de confirmar si faltase algún dato:", 14, 20);
-
-      const formatCurrency = (val: any) => {
-        if (!val) return '';
-        const num = Number(val);
-        if (isNaN(num)) return val.toString();
-        return '$' + num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-      };
-
-      autoTable(doc, {
-        startY: 30,
-        head: [['Cliente', 'Marca', 'Modelo', 'Línea', 'Versión', 'Kilometraje', 'Serie', 'Precio\nCompra', 'Precio\nVenta', 'Precio\nToma', 'Agencia', 'Asesor', 'Tipo de\nCompra', 'Recompra']],
-        body: [
-          [
-            { content: item.cliente, rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.marca, rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.modelo, rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.linea || '', rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.version || '', rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.km || '', rowSpan: 3, styles: { valign: 'middle' } },
-            { content: item.vin, rowSpan: 3, styles: { valign: 'middle' } },
-            { content: formatCurrency(item.precio_compra), rowSpan: 3, styles: { valign: 'middle' } },
-            { content: formatCurrency(item.precio_venta), rowSpan: 3, styles: { valign: 'middle' } },
-            { content: formatCurrency(item.toma), rowSpan: 3, styles: { valign: 'middle' } },
-            { content: 'HYUNDAI COATZACOALCOS', rowSpan: 3, styles: { valign: 'middle' } }, // Agencia
-            { content: item.asesor, rowSpan: 3, styles: { valign: 'middle' } },
-            { content: 'DACION ' + formatCurrency(item.dacion) },
-            { content: 'MARCA\n' + (item.rec_marca || '') }
-          ],
-          [
-            { content: 'FINANCIERA ' + formatCurrency(item.liq_financiera) },
-            { content: 'MODELO\n' + (item.rec_modelo || '') }
-          ],
-          [
-            { content: 'DEV CLIENTE ' + formatCurrency(item.dev_cliente) },
-            { content: 'SERIE\n' + (item.rec_vin || '') }
-          ]
-        ],
-        theme: 'grid',
-        headStyles: { fillColor: [179, 0, 0], textColor: [255, 255, 255], halign: 'center', valign: 'middle', fontSize: 8 },
-        bodyStyles: { textColor: [0, 0, 0], fontSize: 8, lineColor: [0, 0, 0], lineWidth: 0.1 },
-        styles: { cellPadding: 1, overflow: 'linebreak' },
-      });
-
-      const finalY = (doc as any).lastAutoTable.finalY + 15;
-      doc.text(`La unidad requiere acondicionamiento por ${formatCurrency(granTotal)}`, 14, finalY);
-      doc.text("¡Saludos!", 14, finalY + 10);
-
-      doc.save(`Toma_${item.vin}.pdf`);
-    } catch(e) {
-      setCustomAlert({ message: 'Error al generar PDF' });
-    }
-  };
-
+  
 const getStatusOptions = () => {
     if (user.role === 'servicio') return ESTATUS_SERVICIO;
     if (user.role === 'gerencia') return ESTATUS_GERENCIA;
@@ -911,11 +819,11 @@ const getStatusOptions = () => {
                         </button>
                         
                         {(user.role === 'servicio' || user.role === 'gerencia') && <button 
-                            onClick={() => copyAvaluoEmail(item)}
-                            className="p-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors disabled:opacity-30"
-                            title="Copiar Avalúo para Correo"
+                            onClick={() => generateAvaluoPDF(item)}
+                            className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors disabled:opacity-30"
+                            title="Imprimir PDF Avalúo"
                           >
-                            <Copy size={16} />
+                            <FileDown size={16} />
                           </button>}
                           {(user.role === 'asesor' || user.role === 'gerencia') && <button 
                             onClick={() => copyTomaEmail(item)}
